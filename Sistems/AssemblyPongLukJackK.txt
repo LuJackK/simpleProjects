@@ -1,0 +1,504 @@
+JMP main
+
+JMP isr
+; -----------------------------------------------------------------------------
+; Global system variables
+; -----------------------------------------------------------------------------
+vsync: DW 0
+keydown: DW 0
+wPressed: DW 0
+sPressed: DW 0
+upPressed: DW 0
+downPressed: DW 0
+player1Score: DW 0
+player2Score: DW 0
+exit: DW 0
+; -----------------------------------------------------------------------------
+; Interupt sequence
+; -----------------------------------------------------------------------------
+isr:
+	PUSH A
+    IN 1
+    CMP A, 4 ;check graphics bit on irqstatus
+    JNE skipVsync ; if it's not a graphics interupt
+    MOV [vsync], 1 ; set vsync flag to true
+    MOV A, 4
+    OUT 2
+    JMP isrReturn ;exit and clear the interupt
+skipVsync:
+	IN 5 
+    AND A, 1
+    CMP	A, 1 
+    JE keyHeldDown ; check if key is down from kbdstatus (bit 1)
+    IN 5
+    AND A, 2
+    CMP	A, 2
+	JE keyReleased
+    JMP isrReturn ; check if key is up from kbdstatus (bit 2)
+keyHeldDown: ; if it was a keyDown event
+    MOV [keydown], 1 ; if it is set the keydown flag to true
+	IN 6
+    CMP A, 0x0077 ; is the keypressed w?
+    JNE skipW
+    MOV [wPressed], 1 ; set w key flag to true
+skipW:
+    CMP A, 0x0073 ; is the keypressed s?
+    JNE skipS
+    MOV [sPressed], 1 ; set s key flag to true
+skipS:
+    CMP A, 0x0038 ; is the keypressed w?
+    JNE skipUp
+    MOV [upPressed], 1 ; set w key flag to true
+skipUp:
+    CMP A, 0x0035 ; is the keypressed s?
+    JNE isrReturn
+    MOV [downPressed], 1 ; set s key flag to true
+    JMP isrReturn ;exit and clear interupt
+keyReleased: ; if it was a keyUp event
+    MOV [keydown], 0 ; if it is set the keydown flag to true
+	IN 6
+    CMP A, 0x0077 ; is the keypressed w?
+    JNE skipW1
+    MOV [wPressed], 0 ; set w key flag to true
+skipW1:
+    CMP A, 0x0073 ; is the keypressed s?
+    JNE skipS2
+    MOV [sPressed], 0 ; set s key flag to true
+skipS2:	
+    CMP A, 0x0038 ; is the keypressed w?
+    JNE skipUp1
+    MOV [upPressed], 0 ; set w key flag to true
+skipUp1:
+    CMP A, 0x0035 ; is the keypressed s?
+    JNE isrReturn
+    MOV [downPressed], 0
+isrReturn: 
+	IN 6 ;clear kbddata
+	MOV A, 1
+    OUT 2 ; interupt has been serviced
+    POP A
+	IRET 
+
+; -----------------------------------------------------------------------------
+; waitFrames() waits for one graphical interupt 
+; -----------------------------------------------------------------------------
+waitFrame:
+loop:
+	MOV A, [vsync]
+    CMP A, 0 
+    JE loop
+    MOV [vsync], 0
+	RET
+; -----------------------------------------------------------------------------
+; Paddle sprite 
+; -----------------------------------------------------------------------------
+;	we'll be keeping the sprite definition in the memory reserved 
+;	for the A9 ascii char (0x9540-0x9560)
+; -----------------------------------------------------------------------------
+paddleSprite: DW 0x8CE0
+paddle2Sprite: DW 0x8C43
+paddleLoc: DW 0x1280
+paddleShapeData:
+	DB "\xFF\x00\xFF\x00\xFF\x00\xFF\x00\xFF\x00\xFF\x00\xFF\x00\xFF\x00"
+	DB "\xFF\x00\xFF\x00\xFF\x00\xFF\x00\xFF\x00\xFF\x00\xFF\x00\xFF\x00"
+paddle2Loc: DW 0xE880
+; -----------------------------------------------------------------------------
+initPaddle:
+	MOV B, paddleShapeData ; move pointer to shape data
+    MOV C, 0x9180  ; current adress to write the new shape data to
+    MOV D, 16 ; set counter
+initPaddleLoop:
+	CMP D, 0 
+    JE exitInitPaddle
+    MOV A, C
+    OUT 8
+    MOV A, [B]
+    OUT 9 ; write new shape data to location in vram
+    ADD C, 2 ; move current address that we are writing to
+    ADD B, 2	; move shape data array pointer
+    DEC D   ; decrement counter
+    JMP initPaddleLoop
+exitInitPaddle:
+	RET
+; -----------------------------------------------------------------------------    
+
+; -----------------------------------------------------------------------------
+drawPaddle:
+	MOV B, [paddleLoc] ;current paddle location is put on b so we can add to it
+	;draw first half of the paddle
+	MOV A, 0xA306
+    OUT 8
+    MOV A, [paddleSprite]
+    OUT 9 ; first 16 bits -> shape and color
+    MOV A, 0xA308
+    OUT 8
+    MOV A, B
+    OUT 9 ; last 16 bits -> location 
+    ; we save first half paddle sprite to sprite 1 and initialized it on the screen
+    ADD B, 16
+    ;draw second half one cell above the first half
+    MOV A, 0xA30A
+    OUT 8
+    MOV A, [paddleSprite]
+    OUT 9 ; first 16 bits -> shape and color
+    MOV A, 0xA30C
+    OUT 8
+    MOV A, B
+    OUT 9 ; last 16 bits -> location 
+    ; we save second half paddle sprite to sprite 2 and initialized it on the screen
+	RET
+; -----------------------------------------------------------------------------
+movePaddle1Down:
+	MOV C, [paddleLoc]
+    CMPB CL, 0xDB
+    JAE exitMoveP1Down
+    ADDB CL, 3
+    MOV [paddleLoc], C
+   ; Mov paddle location and update the global value	
+exitMoveP1Down:
+   	RET
+
+; -----------------------------------------------------------------------------
+movePaddle1Up:
+	MOV C, [paddleLoc]
+    CMPB CL, 0x02
+    JBE exitMoveP1Up
+    SUBB CL, 3
+    MOV [paddleLoc], C 
+    ; Mov paddle location and update the global value
+exitMoveP1Up:
+    RET
+; -----------------------------------------------------------------------------
+; Paddle2  
+; -----------------------------------------------------------------------------
+drawPaddle2:
+	MOV B, [paddle2Loc] ;current paddle location is put on b so we can add to it
+	;draw first half of the paddle
+	MOV A, 0xA31A
+    OUT 8
+    MOV A, [paddle2Sprite]
+    OUT 9 ; first 16 bits -> shape and color
+    MOV A, 0xA31C
+    OUT 8
+    MOV A, B
+    OUT 9 ; last 16 bits -> location 
+    ; we save first half paddle sprite to sprite 1 and initialized it on the screen
+    ADD B, 16
+    ;draw second half one cell above the first half
+    MOV A, 0xA316
+    OUT 8
+    MOV A, [paddle2Sprite]
+    OUT 9 ; first 16 bits -> shape and color
+    MOV A, 0xA318
+    OUT 8
+    MOV A, B
+    OUT 9 ; last 16 bits -> location 
+    ; we save second half paddle sprite to sprite 2 and initialized it on the screen
+	RET
+; -----------------------------------------------------------------------------
+movePaddle2Down:
+	MOV C, [paddle2Loc]
+    CMPB CL, 0xDB
+    JAE exitMoveP1Down
+    ADDB CL, 2
+    MOV [paddle2Loc], C
+    ; Mov paddle location and update the global value	
+    RET
+; -----------------------------------------------------------------------------
+movePaddle2Up:
+	MOV C, [paddle2Loc]
+    CMPB CL, 0x06
+    JB exitMoveP1Down
+    SUBB CL, 2
+    MOV [paddle2Loc], C 
+    ; Mov paddle location and update the global value
+	RET
+; -----------------------------------------------------------------------------
+;	ball stuff:
+; -----------------------------------------------------------------------------
+ballLoc: DW 0x7080
+ballSpeed: DW 0x0001
+ballDir: DW 0x0002
+; -----------------------------------------------------------------------------
+initBall:
+	MOV A, 0xA312
+    OUT 8
+    MOV A, 0x6FFF
+    OUT 9 ; ball shape color -> sprite4 
+    MOV A, 0x0A314
+    OUT 8
+	MOV A, [ballLoc]
+    OUT 9 ; ball starting cordinates
+	RET
+; -----------------------------------------------------------------------------
+; ballDir = 0 -> up-right
+; ballDir = 1 -> up-left
+; ballDir = 2 -> down-left
+; ballDir = 3 -> down-right
+; -----------------------------------------------------------------------------
+moveBall:
+	MOV B, [ballLoc] ; Ball location -> reg B
+    MOV C, [ballSpeed] ; Ball speed -> reg C
+    MOV D, [ballDir] ; Ball direction -> reg D
+    CMP D, 0 ; Check if ball is going direction
+    JE upRight  ; instructions for specific direction
+    CMP D, 1
+    JE upLeft
+    CMP D, 2
+    JE downLeft
+    CMP D, 3
+    JE downRight
+upRight:
+	; for up-right we increase both y and x axes
+    ADDB BL, CL
+    ADDB BH, CL
+    JMP exitMove
+upLeft:
+	; for up-left we increase y and decrease x axes
+    ADDB BL, CL
+    SUBB BH, CL
+    JMP exitMove
+downLeft:
+    ; for down-left we decrease both y and x axes
+    SUBB BL, CL
+    SUBB BH, CL
+    JMP exitMove
+downRight:
+	; for down-right we decrease y and increase x axes
+    SUBB BL, CL
+    ADDB BH, CL
+    JMP exitMove
+exitMove:
+	MOV [ballLoc], B ; update ball location variable
+    RET
+; -----------------------------------------------------------------------------
+resetPositions:
+	MOV [paddleLoc], 0x1280
+    MOV [paddle2Loc], 0xE880
+    MOV [ballSpeed], 1
+    MOV [ballLoc], 0x7080
+    IN 10
+    AND A, 3
+    MOV [ballDir], A
+; -----------------------------------------------------------------------------
+drawBall:
+	MOV A, 0xA312
+    OUT 8
+    MOV A, 0x6FF4
+    OUT 9 ; ball shape color -> sprite4 
+    MOV A, 0x0A314
+    OUT 8
+	MOV A, [ballLoc] ; update cordinate part of sprite memory
+    OUT 9 
+    CALL checkBallCollison ; check collision after moving ball
+	RET
+; -----------------------------------------------------------------------------
+checkBallCollison:
+	MOV A, [ballSpeed] ; Ball speed -> reg A
+    MOV B, [ballLoc] ; Ball location -> reg B
+
+    MOV D, [ballDir] ; Ball direction -> reg D
+    CMPB BL, 0x00
+    JBE changeDir ; 
+	CMPB BH, 0x00
+    JBE player1Point
+    CMPB BL, 0xF0
+    JAE changeDir
+    CMPB BH, 0xF0
+    JAE player2Point
+    
+    ;checking if ball is touching edges of screen
+    ;if it is we change the direction
+    CMPB BH, 0x7F
+    JAE checkPaddle2
+    MOV C, [paddleLoc] ; Paddle1 location -> reg C
+    ADDB CH, 4
+    CMPB BH, CH
+    JA exitCollision
+    SUBB CL, 10
+	CMPB BL, CL
+    JB exitCollision
+    ADDB CL, 28
+    CMPB BL, CL
+    JAE exitCollision
+	JMP speedUp
+checkPaddle2:
+	MOV C, [paddle2Loc] ; Paddle2 location -> reg C
+	SUBB CH, 14
+    CMPB BH, CH
+    JBE exitCollision
+    SUBB CL, 10
+	CMPB BL, CL
+    JB exitCollision
+    ADDB CL, 34
+    CMPB BL, CL
+    JAE exitCollision
+	JMP speedUp
+speedUp:
+	CMP A, 3
+    JE changeDir
+    INC A
+    JMP changeDir
+player1Point:
+	MOV C, [player1Score]
+    INC C
+    MOV [player1Score], C
+    CALL resetPositions
+    JMP changeDir
+player2Point:
+	MOV C, [player2Score]
+    INC C
+    MOV [player2Score], C
+    CALL resetPositions
+    JMP changeDir
+changeDir:
+	CMP D, 3
+    JE dirOverflow
+    INC D
+    JMP exitCollision
+dirOverflow:
+	MOV D, 0
+exitCollision:
+	MOV [ballDir], D
+    MOV [ballSpeed], A
+    RET
+; -----------------------------------------------------------------------------
+;	processInput()
+; -----------------------------------------------------------------------------
+
+processInput1:
+	MOV B, [keydown]
+    CMP B, 1 ; when the keydown flag is 1 we process the input
+    JNE exitProcessInput
+    MOV B, [wPressed]
+    CMP B, 1
+    JNE skipWpress ; check if w has been pressed
+	CALL movePaddle1Up ; if it was we move the paddle up
+skipWpress:
+    MOV B, [sPressed]
+    CMP B, 1
+    JNE exitProcessInput ; check if s is pressed
+	CALL movePaddle1Down; if it was we move the paddle down
+exitProcessInput:
+	RET
+; -----------------------------------------------------------------------------
+processInput2:
+	MOV B, [upPressed]
+    CMP B, 1
+    JNE skipUpPress ; check if w has been pressed
+	CALL movePaddle2Up ; if it was we move the paddle up
+skipUpPress:
+    MOV B, [downPressed]
+    CMP B, 1
+    JNE exitProcessInput2 ; check if s is pressed
+    CALL movePaddle2Down
+exitProcessInput2:
+	RET
+; -----------------------------------------------------------------------------
+;	Score board and end screens
+; -----------------------------------------------------------------------------
+player1WinStr: DB "PLAYER 1 WINS!"
+			   DB 0
+player2WinStr: DB "PLAYER 2 WINS!"
+			   DB 0
+winner: DW 0
+; -----------------------------------------------------------------------------
+drawScore:
+	MOV A, 0x0014
+    OUT 8
+	MOV B, [player1Score]
+    MOVB AH, BL
+    ADDB AH, 0x30
+    MOVB AL, 0xFC
+    OUT 9
+    MOV A, 0x0008
+    OUT 8
+	MOV B, [player2Score]
+    MOVB AH, BL
+    ADDB AH, 0x30
+    MOVB AL, 0xFC
+    OUT 9
+	RET
+checkScore:
+	MOV B, [player1Score]
+    CMP B, 9
+    JB checkP2Score
+	MOV [winner], 1
+	JMP exitCheckScore
+checkP2Score:
+    MOV B, [player2Score]
+    CMP B, 9
+	JB exitCheckScore
+	MOV [winner], 2
+exitCheckScore:
+	RET	
+player2Win:
+	MOV C, player1WinStr
+    MOV B, 0x0602
+player1WinLoop:
+	MOV A, B
+    OUT 8
+    MOVB AH, [C]
+    MOVB AL, 0xE0
+    OUT 9
+    INC C
+    ADD B, 2
+    MOVB AH, [C]
+    CMPB AH, 0
+    JNE player1WinLoop
+	RET
+player1Win:
+	MOV C, player2WinStr
+    MOV B, 0x0602
+player2WinLoop:
+	MOV A, B
+    OUT 8
+    MOVB AH, [C]
+    MOVB AL, 0x43
+    OUT 9
+    INC C
+    ADD B, 2
+    MOVB AH, [C]
+    CMPB AH, 0
+    JNE player2WinLoop
+	RET
+; -----------------------------------------------------------------------------
+;	Main
+; -----------------------------------------------------------------------------
+main:
+	MOV SP , 0x0FFF ; Stack pointer init
+	MOV A, 1 
+	OUT 7 ; enable text mode vidmode
+    MOV A, 4 ; Graphical and keyboard interupts enabled
+    OUT 0
+    STI ; enable gloabal interupts
+	CALL initPaddle ; initalize the paddle sprite
+	CALL initBall ; init the ball sprite
+; -----------------------------------------------------------------------------
+gameLoop:
+
+	CALL processInput1 ;process the last keyboard input and update global values 
+	CALL drawPaddle ; draw the paddle with the updated values
+    CALL processInput2
+    CALL drawPaddle2
+   	CALL moveBall ; change the gloabl values for the ball depending on direction and speed
+	CALL drawBall ; draw the ball with new cordinates and check the collisons
+    CALL drawScore
+  	CALL checkScore
+    CALL waitFrame ; wait frame between each loop so the game draws in sync with the refresh rate
+    MOV C, [winner]
+    CMP C, 0
+    JE gameLoop
+; -----------------------------------------------------------------------------
+   	MOV A, [winner]
+	CMP A, 1
+	JNE checkp2
+	CALL player1Win
+	JMP exitGame
+checkp2:
+	CMP A, 2
+	JNE exitGame
+	CALL player2Win
+exitGame:
+HLT
+	
