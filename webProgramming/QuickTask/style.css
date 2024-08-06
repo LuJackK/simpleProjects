@@ -1,0 +1,109 @@
+#cUI{
+    font-family: 'Roboto Slab', sans-serif;
+    width: 100%;
+    display: flex;
+    justify-content: space-evenly;
+    
+}
+#cNewTask{
+    display:flex;
+    align-items:space-around;
+}
+#cUI > div  {
+    text-align: center;
+    width:25%;
+    height:100%;
+    display: flex;
+    flex-direction: column;
+    align-items:center;
+    justify-content: space-around;
+}
+#cUI > div > input{
+    margin-top:5%;
+    height:2vw;
+    border: 2px solid rgba(148, 67, 0, 0.187);
+    border-radius: 1vw;
+}
+#addTask, #addGroup{
+    background-color:white;
+    border-radius: 1000%;
+    border:none;
+    width: 10%;
+}
+#addTask:hover, #addGroup:hover{
+    border: 2px solid green;
+}
+#addTask > img, #addGroup > img{
+    width:100%;
+}
+
+#cTasks{
+    background-color: rgba(235, 141, 17, 0.219);
+    width: 80%;
+    margin:auto;
+    margin-top:3vw;
+    height:20vw;
+    position:relative;
+    border-radius: 3vw;
+}
+#cGroups{
+    display:flex;
+    background-color: rgba(148, 67, 0, 0.352);
+    width: 79%;
+    margin:auto;
+    margin-top:2vw;
+    height:20vw;
+    position:relative;
+    border-radius: 3vw;
+    padding: 1%;
+}   
+.group{
+    border: 2px solid rgba(222, 184, 135, 0.692);
+    display:flex;
+    flex-direction: column;
+    background-color: white;
+    width:24%;
+    text-align:center;
+    height:100%;
+    margin-left:1%;
+    margin-right:1%;
+    border-radius:2vw;
+}
+.task{
+    font-family: 'Roboto Condensed', sans-serif;;
+    height: 2vw;
+    background-color: whitesmoke;
+    width: 20%;
+    border: 2px solid black;
+    text-align: center;
+    border-radius: 1vw;
+    position:absolute;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    
+}
+.done{
+    margin-left: 0.1vw;
+    border-radius: 3.5vw;
+    border: none;
+    background-image: url('https://external-content.duckduckgo.com/iu/?u=http%3A%2F%2Fclipart-library.com%2Fimages_k%2Fgreen-check-mark-icon-transparent-background%2Fgreen-check-mark-icon-transparent-background-9.png&f=1&nofb=1&ipt=ac46f51dc6aded73269679872a5895cd95bdea51360c8787836941cf0454ad78&ipo=images');
+    background-size:89%;
+    height:95%;
+    width:15%;
+}
+.done:hover{
+    opacity:0.6;
+}
+.trash{
+    border-radius: 0.6vw;
+    margin-right:.2vw;
+    border: none;
+    background-image: url('https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fwww.iconsdb.com%2Ficons%2Fdownload%2Fred%2Ftrash-10-512.png&f=1&nofb=1&ipt=c03adb6b4201788d0c2abab75f93e016c72279ec5d97b1c3e976e8f9657c288a&ipo=images');
+    background-size:cover;
+    height:95%;
+    width:15%;
+}
+.trash:hover{
+    opacity: 0.6;
+}
